@@ -24,3 +24,4 @@ remove the read MongoDB code replace as comments_clean <- read.csv("YOUR FILE NA
 ## Credit
 This is my individual contribution to a group project, I worked on the code by myself. 
 The work focused on data collection, preprocessing, sentiment modeling, and summary generation.
+Sample comment from:https://www.youtube.com/watch?v=_o2MuUX9UYg
