@@ -1,6 +1,5 @@
 # YouTube Comment Sentiment Analysis: AI Video Generator Models
-This project's goal is for summarizing pros/cons of AI video generation tool in different aspects and overall precentage of positive/negative comments. Kling 3.0, Seedance 2.0 and Veo 3 is 
-being picked.
+This project's goal is for summarizing pros/cons of AI video generation tool in different aspects and overall precentage of positive/negative comments. 
 
 #Method
 *Codes are being run on the google Colab*
