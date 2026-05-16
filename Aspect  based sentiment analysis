@@ -1,0 +1,97 @@
+library(SparkR, lib.loc = c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib")))
+library(stringr)
+library(ggplot2)
+comments_df <- read.df(
+  source = "your source name",
+  uri = "your connection string ",
+  database = "your cluster name",
+  collection = "your collection name"
+)
+data <- collect(comments_df)
+aspect_keywords <- list(
+  Visual_Quality = c("realistic", "blurry", "sharp", "detail", "resolution", "texture", "lighting", "cinematic", "photorealistic",
+  "pixelated", "grainy", "crystal clear", "vibrant", "high quality", "low quality", "4k", "8k", "hd", "looks real", "looks fake"),
+  Motion_Fluidity = c("smooth", "choppy", "jittery", "laggy", "fluid", "natural movement", "robotic", "stiff", "framerate", "fps",
+  "animation", "seamless", "glitchy", "stuttering", "buttery smooth", "motion"),
+  Human_Features = c("hands", "fingers", "face", "eyes", "skin", "expression", "anatomy", "uncanny valley", "deformed", "weird face",
+   "extra fingers", "missing fingers", "dead eyes", "distorted"),
+  Creativity = c("masterpiece", "cinema", "art", "creative", "imagination", "prompt", "generation", "coherent", "incoherent", "nonsensical",
+  "random", "messy", "story", "narrative", "emotional", "vibe", "aesthetic", "atmospheric", "surreal"),
+  Speed_Efficiency = c("fast", "quick", "instant", "rapid", "slow", "lag", "render time", "generation time", "minutes", "seconds", "wait",
+   "waiting", "efficient", "processing")
+)
+negative_medium <- c("bad", "poor", "disappointing", "mediocre", "subpar", "flawed", "problematic", "overrated",
+"not worth it", "blurry", "pixelated", "choppy", "jittery", "low resolution", "uncanny", "weird", "creepy", "distorted",
+"glitchy", "robotic", "fake looking", "inconsistent", "extra fingers", "dead eyes")
+
+negation_words <- c("not", "n't", "never", "no", "none", "nothing", "without", "lack", "doesn't", "don't", "didn't",
+                     "won't", "can't", "cannot", "isn't", "aren't")
+has_negation <- function(text, word) {
+  pattern <- paste0("(?:", paste(negation_words, collapse = "|"), ")\\s+(?:\\w+\\s+){0,2}", word)
+  str_detect(text, pattern)
+}
+calc_aspect <- function(comment,words) {
+  score <- 0
+  for(w in words) {
+    if (str_detect(comment,w)) {
+      if (has_negation(comment,w)) {
+        score<-score- 1
+      } else {
+  near_negative<-any(sapply(negative_medium, function(n) str_detect(comment, n)))
+    if (near_negative) {
+      score <- score - 0.5
+    } else {
+      score<-score + 1
+      }
+      }
+   }
+  }
+  return(score)}
+aspect_results <- list()
+for (asp in names(aspect_keywords)) {
+  aspect_results[[asp]] <- sapply(comments_clean, function(c) calc_aspect(c, aspect_keywords[[asp]]))
+}
+cat("\n========== Aspect-Based Sentiment Results ==========\n")
+aspect_names_en <- c()
+pos_pcts <- c()
+neg_pcts <- c()
+
+for (asp in names(aspect_results)) {
+  scores <- aspect_results[[asp]]
+  mentioned <- scores != 0
+  mentioned_cnt <- sum(mentioned)
+  if (mentioned_cnt > 0) {
+    pos_cnt <- sum(scores[mentioned] > 0)
+    neg_cnt <- sum(scores[mentioned] < 0)
+    pos_pct <- round(pos_cnt / mentioned_cnt * 100, 1)
+    neg_pct <- round(neg_cnt / mentioned_cnt * 100, 1)
+
+    asp_name <- gsub("_", " ", asp)
+    cat(sprintf("%s: mentioned %d times | Positive %.1f%% | Negative %.1f%%\n",
+                asp_name, mentioned_cnt, pos_pct, neg_pct))
+
+    aspect_names_en <- c(aspect_names_en, asp_name)
+    pos_pcts <- c(pos_pcts, pos_pct)
+    neg_pcts <- c(neg_pcts, neg_pct)
+  }
+}
+if (length(aspect_names_en) > 0) {
+  plot_df <- data.frame(
+    Aspect = rep(aspect_names_en, 2),
+    Sentiment = c(rep("Positive", length(aspect_names_en)), rep("Negative", length(aspect_names_en))),
+    Percentage = c(pos_pcts, neg_pcts)
+  )
+  ggplot(plot_df, aes(x = Aspect, y = Percentage, fill = Sentiment)) +
+    geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+    scale_fill_manual(values = c("Positive" = "sea green", "Negative" = "red")) +
+    geom_text(aes(label =paste0(Percentage,"%")),
+              position = position_dodge(width = 0.7), vjust= -0.5, size = 4) +
+    labs(title = "Aspect-Based Sentiment seedance 2.0",x = "", y ="Percentage (%)") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust=0.5, size= 16,face ="bold"),
+          axis.text = element_text(size = 11),
+          axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.title = element_blank(),
+          legend.position = "top") +
+    ylim(0, 105)
+}
