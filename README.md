@@ -12,6 +12,13 @@ Read the data preprocessed data, return results about the Strong and weaks of th
 It's not necessary to use MongoDB, but you can still connect to your own, you can jsut read the comment file u scratched,
 remove the read MongoDB code replace as comments_clean <- read.csv("YOUR FILE NAME.txt")
 
+## Requirements
+
+### Option 1: Local Use (No MongoDB Required) 
+- R (4.0 or above)
+- R packages: "stringr", "ggplot2", "fmsb", "scales"
+### Option 2: Local Use (No MongoDB Required) 
+ library:"mongolite"
 
 
 ## Credit
