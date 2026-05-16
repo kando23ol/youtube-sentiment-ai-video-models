@@ -1,0 +1,77 @@
+
+library(SparkR, lib.loc = c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib")))
+library(stringr)
+library(ggplot2)
+comments_df <- read.df(
+  source = "your source name",
+  uri = "your connection string",
+  database = "your cluster",
+  collection = "your group"
+)
+data <- collect(comments_df)
+comments_clean <- data$comment
+##Remove any completely empty strings just in case
+comments_clean <- comments_clean[comments_clean != ""]
+cat("Total comments:", length(comments_clean), "\n")
+positive_strong <- c("mind blowing", "jaw dropping", "absolute cinema", "game changing", "next level",
+     "breathtaking", "flawless", "masterpiece", "perfect", "incredible", "photorealistic",
+     "hyperrealistic", "looks real", "looks so real")
+positive_medium <- c("amazing", "awesome", "fantastic", "wonderful", "brilliant", "impressive", "stunning",
+     "beautiful", "epic", "insane", "crazy good", "love it", "smooth motion",
+       "fluid animation", "seamless", "cinematic", "movie quality", "high fidelity",
+      "visually stunning", "realistic textures", "lifelike")
+positive_weak   <- c("good", "nice", "cool", "decent", "pretty good", "not bad", "solid",
+                     "promising", "interesting", "learned a lot")
+negative_strong <- c("terrible", "horrible", "awful", "garbage", "trash", "disaster", "abomination",
+      "worst", "unwatchable", "scam", "fake", "useless", "waste", "ai slop", "shitty")
+negative_medium <- c("bad", "poor", "disappointing", "mediocre", "subpar", "flawed", "problematic",
+       "overrated", "not worth it", "blurry", "pixelated", "choppy", "jittery",
+        "low resolution", "uncanny", "weird", "creepy", "distorted", "glitchy",
+            "robotic", "fake looking", "inconsistent", "extra fingers", "dead eyes")
+negative_weak   <- c("not great", "could be better", "meh", "so-so", "disappointed",
+      "annoying", "boring", "sucks", "hate")
+
+negation_words <- c("not", "n't", "never", "no", "none", "nothing", "without", "lack",
+    "doesn't", "don't", "didn't", "won't", "can't", "cannot", "isn't", "aren't")
+
+has_negation <- function(text, word) {
+  pattern <- paste0("(?:", paste(negation_words, collapse = "|"), ")\\s+(?:\\w+\\s+){0,2}", word)
+  str_detect(text, pattern)
+}
+calc_sentiment <- function(comment) {
+  score <- 0
+  for (w in positive_strong) if(str_detect(comment, w)) score <- score + ifelse(has_negation(comment, w), -3, 3)
+  for (w in positive_medium) if(str_detect(comment, w)) score <- score + ifelse(has_negation(comment, w), -2, 2)
+  for (w in positive_weak)   if(str_detect(comment, w)) score <- score + ifelse(has_negation(comment, w), -1, 1)
+  for (w in negative_strong) if(str_detect(comment, w)) score <- score + ifelse(has_negation(comment, w), 3, -3)
+  for (w in negative_medium) if(str_detect(comment, w)) score <- score + ifelse(has_negation(comment, w), 2, -2)
+  for (w in negative_weak)   if(str_detect(comment, w)) score <- score + ifelse(has_negation(comment, w), 1, -1)
+  return(score)
+}
+classify <- function(score) {
+  if (score > 0.5) return("Positive")
+  else if (score < -0.5) return("Negative")
+  else return("Neutral")
+}
+sentiment_scores <- sapply(comments_clean, calc_sentiment)
+sentiment_labels <- sapply(sentiment_scores, classify)
+sentiment_table <- table(sentiment_labels) #to get overall result
+sentiment_pct <- round(sentiment_table / sum(sentiment_table) * 100, 2)
+cat("\n========== Overall Sentiment Results ==========\n")
+cat("Positive:", sentiment_pct["Positive"], "% (", sentiment_table["Positive"], " comments)\n")
+cat("Negative:", sentiment_pct["Negative"], "% (", sentiment_table["Negative"], " comments)\n")
+cat("Neutral: ", sentiment_pct["Neutral"], "% (", sentiment_table["Neutral"], " comments)\n")
+plot_data <- data.frame(
+  Sentiment = names(sentiment_table),
+  Percentage = as.numeric(sentiment_pct)
+)
+ggplot(plot_data, aes(x=Sentiment,y=Percentage,fill =Sentiment)) +
+  geom_bar(stat="identity", width = 0.6)+
+  geom_text(aes(label=paste0(Percentage,"%")),vjust=-0.5,size=6) +
+  scale_fill_manual(values = c("Negative" = "red", "Neutral"="orange", "Positive"=" seagreen"))+
+  labs(title="Seedance 2.0",x="",y= "Percentage (%)") +
+  theme_minimal()+
+  theme(plot.title=element_text(hjust = 0.5,size=16,face="bold"),
+        axis.text=element_text(size = 12),
+        legend.position="none") +
+  ylim(0, max(plot_data$Percentage)+10)
